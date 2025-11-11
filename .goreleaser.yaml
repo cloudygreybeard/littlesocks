@@ -1,0 +1,158 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: littlesocks
+    binary: littlesocks
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.appVersion={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: littlesocks-archives
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE*
+      - README*
+      - CHANGELOG*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+dockers:
+  - id: littlesocks-amd64
+    ids:
+      - littlesocks
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/cloudygreybeard/littlesocks:{{ .Version }}-amd64"
+      - "ghcr.io/cloudygreybeard/littlesocks:latest-amd64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=SOCKS5 proxy server"
+      - "--label=org.opencontainers.image.url=https://github.com/cloudygreybeard/littlesocks"
+      - "--label=org.opencontainers.image.source=https://github.com/cloudygreybeard/littlesocks"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+  - id: littlesocks-arm64
+    ids:
+      - littlesocks
+    goos: linux
+    goarch: arm64
+    image_templates:
+      - "ghcr.io/cloudygreybeard/littlesocks:{{ .Version }}-arm64"
+      - "ghcr.io/cloudygreybeard/littlesocks:latest-arm64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=SOCKS5 proxy server"
+      - "--label=org.opencontainers.image.url=https://github.com/cloudygreybeard/littlesocks"
+      - "--label=org.opencontainers.image.source=https://github.com/cloudygreybeard/littlesocks"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+docker_manifests:
+  - name_template: "ghcr.io/cloudygreybeard/littlesocks:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/cloudygreybeard/littlesocks:{{ .Version }}-amd64"
+      - "ghcr.io/cloudygreybeard/littlesocks:{{ .Version }}-arm64"
+
+  - name_template: "ghcr.io/cloudygreybeard/littlesocks:latest"
+    image_templates:
+      - "ghcr.io/cloudygreybeard/littlesocks:latest-amd64"
+      - "ghcr.io/cloudygreybeard/littlesocks:latest-arm64"
+
+brews:
+  - name: littlesocks
+    repository:
+      owner: cloudygreybeard
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_DEPLOY_KEY }}"
+    directory: Formula
+    homepage: "https://github.com/cloudygreybeard/littlesocks"
+    description: "SOCKS5 proxy server"
+    license: "Apache-2.0"
+    test: |
+      system "#{bin}/littlesocks", "-version"
+    install: |
+      bin.install "littlesocks"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - "^style:"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "Bug fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: cloudygreybeard
+    name: littlesocks
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## littlesocks SOCKS5 Proxy ({{ .Tag }})
+    
+    A SOCKS5 proxy server written in Go.
+    
+    ### Downloads
+    
+    Choose the appropriate binary for your platform below.
+  footer: |
+    ## Installation
+    
+    1. Download the appropriate archive for your platform
+    2. Extract the binary
+    3. Run with `./littlesocks -addr :1080`
+    
+    **Full Changelog**: https://github.com/cloudygreybeard/littlesocks/compare/{{ .PreviousTag }}...{{ .Tag }}
+
