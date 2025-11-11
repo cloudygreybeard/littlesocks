@@ -45,5 +45,77 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_DEPLOY_KEY: ${{ secrets.HOMEBREW_DEPLOY_KEY }}
+
+      - name: Update Homebrew Formula
+        run: |
+          # Extract version from tag
+          VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Download the darwin_arm64 tarball to calculate SHA256
+          TARBALL_URL="https://github.com/cloudygreybeard/littlesocks/releases/download/v${VERSION}/littlesocks_${VERSION}_darwin_arm64.tar.gz"
+          curl -L -o littlesocks.tar.gz "$TARBALL_URL"
+          SHA256=$(shasum -a 256 littlesocks.tar.gz | cut -d' ' -f1)
+
+          # Setup SSH for deploy key authentication
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOMEBREW_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+          # Clone the homebrew repository using SSH
+          git clone git@github.com:cloudygreybeard/homebrew-tap.git homebrew-repo
+          cd homebrew-repo
+
+          # Create or update the formula
+          cat > Formula/littlesocks.rb << 'EOF'
+          class Littlesocks < Formula
+            desc "SOCKS5 proxy server"
+            homepage "https://github.com/cloudygreybeard/littlesocks"
+            version "VERSION_PLACEHOLDER"
+            license "Apache-2.0"
+
+            if Hardware::CPU.arm?
+              url "https://github.com/cloudygreybeard/littlesocks/releases/download/vVERSION_PLACEHOLDER/littlesocks_VERSION_PLACEHOLDER_darwin_arm64.tar.gz"
+              sha256 "SHA256_PLACEHOLDER"
+            else
+              url "https://github.com/cloudygreybeard/littlesocks/releases/download/vVERSION_PLACEHOLDER/littlesocks_VERSION_PLACEHOLDER_darwin_amd64.tar.gz"
+              sha256 "SHA256_AMD64_PLACEHOLDER"
+            end
+
+            def install
+              bin.install "littlesocks"
+            end
+
+            test do
+              system "#{bin}/littlesocks", "-version"
+            end
+          end
+          EOF
+
+          # Download AMD64 tarball for its SHA256
+          TARBALL_AMD64_URL="https://github.com/cloudygreybeard/littlesocks/releases/download/v${VERSION}/littlesocks_${VERSION}_darwin_amd64.tar.gz"
+          curl -L -o littlesocks_amd64.tar.gz "$TARBALL_AMD64_URL"
+          SHA256_AMD64=$(shasum -a 256 littlesocks_amd64.tar.gz | cut -d' ' -f1)
+
+          # Update placeholders in the formula
+          sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" Formula/littlesocks.rb
+          sed -i '' "s/SHA256_PLACEHOLDER/$SHA256/" Formula/littlesocks.rb
+          sed -i '' "s/SHA256_AMD64_PLACEHOLDER/$SHA256_AMD64/" Formula/littlesocks.rb
+
+          # Commit and push the changes
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add Formula/littlesocks.rb
+          git commit -m "Update littlesocks to v$VERSION
+
+          - Update to version $VERSION
+          - Update SHA256 hashes for darwin_arm64 and darwin_amd64
+          - Automated release from GoReleaser"
+          
+          # Push using SSH (deploy key authentication)
+          git push origin main
+
+          echo "Updated Homebrew formula for version $VERSION"
+          echo "ARM64 SHA256: ${SHA256}"
+          echo "AMD64 SHA256: ${SHA256_AMD64}"
 

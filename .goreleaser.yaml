@@ -96,22 +96,6 @@ docker_manifests:
       - "ghcr.io/cloudygreybeard/littlesocks:latest-amd64"
       - "ghcr.io/cloudygreybeard/littlesocks:latest-arm64"
 
-brews:
-  - name: littlesocks
-    repository:
-      owner: cloudygreybeard
-      name: homebrew-tap
-      branch: main
-      token: "{{ .Env.HOMEBREW_DEPLOY_KEY }}"
-    directory: Formula
-    homepage: "https://github.com/cloudygreybeard/littlesocks"
-    description: "SOCKS5 proxy server"
-    license: "Apache-2.0"
-    test: |
-      system "#{bin}/littlesocks", "-version"
-    install: |
-      bin.install "littlesocks"
-
 changelog:
   sort: asc
   use: github
