@@ -97,10 +97,10 @@ jobs:
           curl -L -o littlesocks_amd64.tar.gz "$TARBALL_AMD64_URL"
           SHA256_AMD64=$(shasum -a 256 littlesocks_amd64.tar.gz | cut -d' ' -f1)
 
-          # Update placeholders in the formula
-          sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" Formula/littlesocks.rb
-          sed -i '' "s/SHA256_PLACEHOLDER/$SHA256/" Formula/littlesocks.rb
-          sed -i '' "s/SHA256_AMD64_PLACEHOLDER/$SHA256_AMD64/" Formula/littlesocks.rb
+          # Update placeholders in the formula (Linux sed syntax)
+          sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" Formula/littlesocks.rb
+          sed -i "s/SHA256_PLACEHOLDER/$SHA256/" Formula/littlesocks.rb
+          sed -i "s/SHA256_AMD64_PLACEHOLDER/$SHA256_AMD64/" Formula/littlesocks.rb
 
           # Commit and push the changes
           git config user.name "GitHub Actions"
