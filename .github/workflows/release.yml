@@ -3,119 +3,49 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
   packages: write
 
 jobs:
-  goreleaser:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
-          cache: true
+          go-version: stable
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v6
         with:
-          distribution: goreleaser
-          version: latest
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update Homebrew Formula
-        run: |
-          # Extract version from tag
-          VERSION=${GITHUB_REF#refs/tags/v}
-
-          # Download the darwin_arm64 tarball to calculate SHA256
-          TARBALL_URL="https://github.com/cloudygreybeard/littlesocks/releases/download/v${VERSION}/littlesocks_${VERSION}_darwin_arm64.tar.gz"
-          curl -L -o littlesocks.tar.gz "$TARBALL_URL"
-          SHA256=$(shasum -a 256 littlesocks.tar.gz | cut -d' ' -f1)
-
-          # Setup SSH for deploy key authentication
-          mkdir -p ~/.ssh
-          echo "${{ secrets.HOMEBREW_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-          # Clone the homebrew repository using SSH
-          git clone git@github.com:cloudygreybeard/homebrew-tap.git homebrew-repo
-          cd homebrew-repo
-
-          # Create or update the formula
-          cat > Formula/littlesocks.rb << 'EOF'
-          class Littlesocks < Formula
-            desc "SOCKS5 proxy server"
-            homepage "https://github.com/cloudygreybeard/littlesocks"
-            version "VERSION_PLACEHOLDER"
-            license "Apache-2.0"
-
-            if Hardware::CPU.arm?
-              url "https://github.com/cloudygreybeard/littlesocks/releases/download/vVERSION_PLACEHOLDER/littlesocks_VERSION_PLACEHOLDER_darwin_arm64.tar.gz"
-              sha256 "SHA256_PLACEHOLDER"
-            else
-              url "https://github.com/cloudygreybeard/littlesocks/releases/download/vVERSION_PLACEHOLDER/littlesocks_VERSION_PLACEHOLDER_darwin_amd64.tar.gz"
-              sha256 "SHA256_AMD64_PLACEHOLDER"
-            end
-
-            def install
-              bin.install "littlesocks"
-            end
-
-            test do
-              system "#{bin}/littlesocks", "-version"
-            end
-          end
-          EOF
-
-          # Download AMD64 tarball for its SHA256
-          TARBALL_AMD64_URL="https://github.com/cloudygreybeard/littlesocks/releases/download/v${VERSION}/littlesocks_${VERSION}_darwin_amd64.tar.gz"
-          curl -L -o littlesocks_amd64.tar.gz "$TARBALL_AMD64_URL"
-          SHA256_AMD64=$(shasum -a 256 littlesocks_amd64.tar.gz | cut -d' ' -f1)
-
-          # Update placeholders in the formula (Linux sed syntax)
-          sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" Formula/littlesocks.rb
-          sed -i "s/SHA256_PLACEHOLDER/$SHA256/" Formula/littlesocks.rb
-          sed -i "s/SHA256_AMD64_PLACEHOLDER/$SHA256_AMD64/" Formula/littlesocks.rb
-
-          # Commit and push the changes
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add Formula/littlesocks.rb
-          git commit -m "Update littlesocks to v$VERSION
-
-          - Update to version $VERSION
-          - Update SHA256 hashes for darwin_arm64 and darwin_amd64
-          - Automated release from GoReleaser"
-          
-          # Push using SSH (deploy key authentication)
-          git push origin main
-
-          echo "Updated Homebrew formula for version $VERSION"
-          echo "ARM64 SHA256: ${SHA256}"
-          echo "AMD64 SHA256: ${SHA256_AMD64}"
-
+  update-tap:
+    needs: release
+    uses: cloudygreybeard/homebrew-tap/.github/workflows/release-homebrew-formula.yml@main
+    with:
+      package-name: littlesocks
+      binary-name: littlesocks
+      formula-class: Littlesocks
+      formula-desc: "SOCKS5 proxy server"
+      artifact-style: goreleaser
+      private: false
+    secrets:
+      deploy-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
